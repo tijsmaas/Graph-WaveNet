@@ -119,8 +119,8 @@ class GWNet(nn.Module):
     def forward(self, input):
         # Input shape is (bs, features, n_nodes, n_timesteps)
         in_len = input.size(3)
-        if in_len<self.receptive_field:
-            x = nn.functional.pad(input, (self.receptive_field - in_len,0,0,0))
+        if in_len < self.receptive_field:
+            x = nn.functional.pad(input, (self.receptive_field - in_len, 0,0,0))
         else:
             x = input
         x = self.start_conv(x)
@@ -151,26 +151,35 @@ class GWNet(nn.Module):
             gate = torch.sigmoid(self.gate_convs[i](residual))
             x = filter * gate
             # parametrized skip connection
-            s = x
-            s = self.skip_convs[i](s)
+            x_skip = self.skip_convs[i](x)
             try:  # if i > 0 this works
-                skip = skip[:, :, :,  -s.size(3):]  # TODO(SS): Mean/Max Pool?
+                skip = smart_trunc(skip, x_skip.size(3))
+                skip[:, :, :, -x_skip.size(3):]  # TODO(SS): Mean/Max Pool?
             except:
                 skip = 0
-            skip = s + skip
+            skip = x_skip + skip
 
-            if self.do_graph_conv and self.supports is not None:
-                support = adjacency_matrices if self.addaptadj else self.supports
-                x = self.graph_convs[i](x, support)
+            if self.do_graph_conv:
+                x = self.graph_convs[i](x, adjacency_matrices)
             else:
                 x = self.residual_convs[i](x)
-            x = x + residual[:, :, :, -x.size(3):] # TODO(SS): Mean/Max Pool?
+            x = x + smart_trunc(residual, x.size(3)) # TODO(SS): Mean/Max Pool?
             x = self.bn[i](x)
 
         x = F.relu(skip)  # ignore last X?
         x = F.relu(self.end_conv_1(x))
         x = self.end_conv_2(x)
         return x
+
+def smart_trunc(x, new_size):
+    # Maybe ewma?
+    if new_size == 1: return x[:, :, :, -1:]
+    split_idx = (x.size(3) - new_size) + 1
+    recent = x[:, :, :, split_idx:]
+    old = x[:, :, :, :split_idx].mean(dim=3).unsqueeze(-1)
+    new_tensor =  torch.cat([old, recent], dim=3)
+    assert new_tensor.shape[3] == new_size
+    return new_tensor
 
 
 
