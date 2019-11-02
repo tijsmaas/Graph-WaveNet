@@ -154,7 +154,6 @@ class GWNet(nn.Module):
             x_skip = self.skip_convs[i](x)
             try:  # if i > 0 this works
                 skip = smart_trunc(skip, x_skip.size(3))
-                skip[:, :, :, -x_skip.size(3):]  # TODO(SS): Mean/Max Pool?
             except:
                 skip = 0
             skip = x_skip + skip
