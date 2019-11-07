@@ -80,7 +80,36 @@ def main(args):
     pred_df = util.make_pred_df(realy, yhat, scaler)
     pred_df.to_csv(os.path.join(args.save, 'preds.csv'))
 
+def test(args):
+    device = torch.device(args.device)
+    sensor_ids, sensor_id_to_ind, adj_mx = util.load_adj(args.adjdata, args.adjtype)
+    supports = [torch.tensor(i).to(device) for i in adj_mx]
+    dataloader = util.load_dataset(args.data, args.batch_size, args.batch_size, args.batch_size,
+                                   n_obs=args.n_obs)
+    scaler = dataloader['scaler']
+    print(args)
+    best_model_save_path = os.path.join(args.save, 'best_model.pth')
 
+    if args.randomadj:
+        adjinit = None
+    else:
+        adjinit = supports[0]
+
+    if args.aptonly:
+        supports = None
+    engine = Trainer(scaler, args.in_dim, args.seq_length, args.num_nodes, args.nhid,
+                     args.dropout,
+                     args.learning_rate, args.weight_decay, device, supports,
+                     args.do_graph_conv,
+                     args.addaptadj, adjinit)
+    # Metrics on test data
+    engine.model.load_state_dict(torch.load(best_model_save_path))
+    realy = torch.Tensor(dataloader['y_test']).transpose(1, 3)[:, 0, :, :].to(device)
+    test_met_df, yhat = calc_test_metrics(engine.model, device, dataloader['test_loader'],
+                                          scaler, realy)
+    test_met_df.round(4).to_csv(os.path.join(args.save, 'test_metrics_v2.csv'))
+    pred_df = util.make_pred_df(realy, yhat, scaler)
+    pred_df.to_csv(os.path.join(args.save, 'preds_c2.csv'))
 
 
 def eval_(ds, device, engine):
