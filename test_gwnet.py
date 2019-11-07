@@ -23,6 +23,7 @@ class TestTrain(unittest.TestCase):
         args.epochs = 2
         args.n_iters = 1
         args.batch_size = 2
+        args.in_dim = 1
         args.n_obs = 2
         args.save = SAVE_DIR
         main(args)
@@ -33,6 +34,7 @@ class TestTrain(unittest.TestCase):
 
     def test_test_script(self):
         test_args = pickle_load(TEST_ARGS)
+        test_args.in_dim = 1
         test_args.checkpoint = SAVE_DIR + '/best_model.pth'
         self.assertTrue(os.path.exists(test_args.checkpoint))
         test_args.n_obs = 2
