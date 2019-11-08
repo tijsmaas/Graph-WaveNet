@@ -78,6 +78,8 @@ class GWNet(nn.Module):
                 self.nodevec1 = nn.Parameter(initemb1, requires_grad=True).to(device)
                 self.nodevec2 = nn.Parameter(initemb2, requires_grad=True).to(device)
                 self.supports_len += 1
+            self.register_parameter('nodevec1', self.nodevec1)
+            self.register_parameter('nodevec2', self.nodevec2)
 
         for b in range(blocks):
             additional_scope = kernel_size - 1
