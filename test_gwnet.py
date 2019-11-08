@@ -20,14 +20,14 @@ class TestTrain(unittest.TestCase):
 
     def test_1_epoch(self):
         args = pickle_load(TRAIN_ARGS)
-        args.epochs = 2
+        args.epochs = 1
         args.n_iters = 1
         args.batch_size = 2
         args.n_obs = 2
         args.save = SAVE_DIR
         main(args)
         df = pd.read_csv(f'{args.save}/metrics.csv', index_col=0)
-        self.assertEqual(df.shape, (2, 6))
+        self.assertEqual(df.shape, (args.epochs, 6))
         test_df = pd.read_csv(f'{args.save}/test_metrics.csv', index_col=0)
         self.assertEqual(test_df.shape, (12, 3))
         test_args = pickle_load(TEST_ARGS)
