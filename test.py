@@ -18,13 +18,13 @@ def main(args):
 
     if args.aptonly:
         supports = None
-
-    model = GWNet(device, args.num_nodes, args.dropout,
-                  supports=supports, do_graph_conv=args.do_graph_conv,
-                  addaptadj=args.addaptadj, aptinit=adjinit
-                  )
+    model = torch.load(args.checkpoint)
+    # model = GWNet(device, args.num_nodes, args.dropout,
+    #               supports=supports, do_graph_conv=args.do_graph_conv,
+    #               addaptadj=args.addaptadj, aptinit=adjinit
+    #               )
     model.to(device)
-    model.load_state_dict(torch.load(args.checkpoint))
+    #model.load(torch.load(args.checkpoint))
     model.eval()
     print('model loaded successfully')
     dataloader = util.load_dataset(args.data, args.batch_size, args.batch_size, args.batch_size, n_obs=args.n_obs)

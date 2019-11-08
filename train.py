@@ -65,20 +65,21 @@ def main(args):
         print(f'Epoch {i}')
         print(m.round(4))
         if m.valid_loss < best_yet:
-            torch.save(engine.model.state_dict(), best_model_save_path)
+            torch.save(engine.model, best_model_save_path)
             best_yet = m.valid_loss
         met_df = pd.DataFrame(metrics)
         met_df.round(4).to_csv(f'{args.save}/metrics.csv')
     print(f"Training finished. Best Valid Loss")
     print(met_df.loc[met_df.valid_loss.idxmin()].round(4))
     # Metrics on test data
-    engine.model.load_state_dict(torch.load(best_model_save_path))
+    engine.model = torch.load(best_model_save_path)
     realy = torch.Tensor(dataloader['y_test']).transpose(1, 3)[:, 0, :, :].to(device)
     test_met_df, yhat = calc_test_metrics(engine.model, device, dataloader['test_loader'], scaler, realy)
     test_met_df.round(4).to_csv(os.path.join(args.save, 'test_metrics.csv'))
     print(test_met_df.mean().round(3))
     pred_df = util.make_pred_df(realy, yhat, scaler)
     pred_df.to_csv(os.path.join(args.save, 'preds.csv'))
+    return engine
 
 def test(args):
     device = torch.device(args.device)
