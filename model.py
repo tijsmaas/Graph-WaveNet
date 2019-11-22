@@ -173,7 +173,7 @@ class GWNet(nn.Module):
 
         x = F.relu(skip)  # ignore last X?
         x = F.relu(self.end_conv_1(x))
-        x = self.end_conv_2(x)
+        x = self.end_conv_2(x)  # downsample to (bs, 12, 207, nfeatures)
         return x
 
 

@@ -130,7 +130,7 @@ if __name__ == "__main__":
     # parser.add_argument('--expid', default=1, help='experiment id')
     parser.add_argument('--n_iters', default=None, help='quit after this many iterations')
     parser.add_argument('--n_obs', default=None, help='Only use this many observations')
-    parser.add_argument('--apt_size', default=10)
+    parser.add_argument('--apt_size', default=10, type=int)
 
     args = parser.parse_args()
     t1 = time.time()
