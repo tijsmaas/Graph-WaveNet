@@ -5,12 +5,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from durbango import pickle_save
 
 
 def main(args):
     device = torch.device(args.device)
-
     _, _, adj_mx = util.load_adj(args.adjdata,args.adjtype)
     supports = [torch.tensor(i).to(device) for i in adj_mx]
     if args.randomadj:
@@ -21,14 +19,15 @@ def main(args):
     if args.aptonly:
         supports = None
 
-    model = GWNet(device, args.num_nodes, args.dropout, supports=supports, do_graph_conv=args.do_graph_conv, addaptadj=args.addaptadj, aptinit=adjinit)
+    model = GWNet(device, args.num_nodes, args.dropout,
+                  supports=supports, do_graph_conv=args.do_graph_conv,
+                  addaptadj=args.addaptadj, aptinit=adjinit, apt_size=args.apt_size,
+                  in_dim=args.in_dim,
+                  )
     model.to(device)
     model.load_state_dict(torch.load(args.checkpoint))
     model.eval()
-
-
     print('model loaded successfully')
-
     dataloader = util.load_dataset(args.data, args.batch_size, args.batch_size, args.batch_size, n_obs=args.n_obs)
     scaler = dataloader['scaler']
     realy = torch.Tensor(dataloader['y_test']).to(device)
@@ -41,12 +40,7 @@ def main(args):
     if args.plotheatmap == "True":
         plot_heatmap(model)
 
-    y12 = realy[:,99,11].cpu().detach().numpy()
-    yhat12 = scaler.inverse_transform(yhat[:,99,11]).cpu().detach().numpy()
-
-    y3 = realy[:,99,2].cpu().detach().numpy()
-    yhat3 = scaler.inverse_transform(yhat[:,99,2]).cpu().detach().numpy()
-    df2 = pd.DataFrame({'real12': y12, 'pred12': yhat12, 'real3': y3, 'pred3': yhat3})
+    df2 = util.make_pred_df(realy, yhat, scaler)
 
     df2.to_csv('./wave.csv', index=False)
 

@@ -4,6 +4,11 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import sys
 
+
+def nconv(x, A):
+    """Multiply along source node axis"""
+    return torch.einsum('ncvl,vw->ncwl', (x, A)).contiguous()
+
 class GraphConvNet(nn.Module):
     def __init__(self, c_in, c_out, dropout, support_len=3, order=2):
         super().__init__()
@@ -12,16 +17,13 @@ class GraphConvNet(nn.Module):
         self.dropout = dropout
         self.order = order
 
-    def nconv(self, x, A):
-        return torch.einsum('ncvl,vw->ncwl', (x, A)).contiguous()
-
     def forward(self, x, support):
         out = [x]
         for a in support:
-            x1 = self.nconv(x,a)
+            x1 = nconv(x, a)
             out.append(x1)
             for k in range(2, self.order + 1):
-                x2 = self.nconv(x1, a)
+                x2 = nconv(x1, a)
                 out.append(x2)
                 x1 = x2
 
@@ -32,9 +34,9 @@ class GraphConvNet(nn.Module):
 
 
 class GWNet(nn.Module):
-    def __init__(self, device, num_nodes, dropout=0.3, supports=None, do_graph_conv=True, addaptadj=True, aptinit=None,
-                 in_dim=2, out_dim=12, residual_channels=32, dilation_channels=32, skip_channels=256,
-                 end_channels=512, kernel_size=2, blocks=4, layers=2):
+    def __init__(self, device, num_nodes, dropout=0.3, supports=None, do_graph_conv=True,
+                 addaptadj=True, aptinit=None, in_dim=2, out_dim=12, residual_channels=32, dilation_channels=32,
+                 skip_channels=256, end_channels=512, kernel_size=2, blocks=4, layers=2, apt_size=10):
         super().__init__()
         self.dropout = dropout
         self.blocks = blocks
@@ -64,16 +66,16 @@ class GWNet(nn.Module):
         if do_graph_conv and addaptadj:
             if supports is None: self.supports = []
             if aptinit is None:
-                self.nodevec1 = nn.Parameter(torch.randn(num_nodes, 10), requires_grad=True).to(device)
-                self.nodevec2 = nn.Parameter(torch.randn(10, num_nodes), requires_grad=True).to(device)
-                self.supports_len +=1
+                nodevec1 = torch.randn(num_nodes, apt_size)
+                nodevec2 = torch.randn(apt_size, num_nodes)
             else:
                 m, p, n = torch.svd(aptinit)
-                initemb1 = torch.mm(m[:, :10], torch.diag(p[:10] ** 0.5))
-                initemb2 = torch.mm(torch.diag(p[:10] ** 0.5), n[:, :10].t())
-                self.nodevec1 = nn.Parameter(initemb1, requires_grad=True).to(device)
-                self.nodevec2 = nn.Parameter(initemb2, requires_grad=True).to(device)
-                self.supports_len += 1
+                nodevec1 = torch.mm(m[:, :apt_size], torch.diag(p[:apt_size] ** 0.5))
+                nodevec2 = torch.mm(torch.diag(p[:apt_size] ** 0.5), n[:, :apt_size].t())
+            self.supports_len += 1
+            
+            self.register_parameter('nodevec1', nn.Parameter(nodevec1.to(device), requires_grad=True))
+            self.register_parameter('nodevec2', nn.Parameter(nodevec2.to(device), requires_grad=True))
 
         for b in range(blocks):
             additional_scope = kernel_size - 1
@@ -102,7 +104,9 @@ class GWNet(nn.Module):
                 receptive_field += additional_scope
                 additional_scope *= 2
                 if self.do_graph_conv:
-                    self.graph_convs.append(GraphConvNet(dilation_channels, residual_channels, dropout, support_len=self.supports_len))
+                    self.graph_convs.append(
+                        GraphConvNet(dilation_channels, residual_channels, dropout,
+                                     support_len=self.supports_len))
 
         self.end_conv_1 = nn.Conv2d(in_channels=skip_channels,
                                     out_channels=end_channels,

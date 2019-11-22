@@ -1,2 +1,6 @@
 durbango
+tables
 tqdm
+matplotlib
+numpy
+argparse
