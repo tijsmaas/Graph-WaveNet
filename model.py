@@ -135,7 +135,7 @@ class GWNet(nn.Module):
         #fproc = F.glu(self.cat_layer(f2))
         #torch.stack([fproc[:, :256]] * 207)
         x1 = self.start_conv(f1)
-        x2 = F.glu(self.start_traffic_conv(f2))
+        x2 = F.leaky_relu(self.start_traffic_conv(f2))
         x = x1 + x2
         skip = 0
 
