@@ -148,7 +148,7 @@ def load_dataset(dataset_dir, batch_size, valid_batch_size= None, test_batch_siz
     data = {}
     for category in ['train', 'val', 'test']:
         cat_data = np.load(os.path.join(dataset_dir, category + '.npz'))
-        data['x_' + category] = cat_data['x'][:, :, :, [0]]  # just speed
+        data['x_' + category] = cat_data['x']
         data['y_' + category] = cat_data['y']
         if n_obs is not None:
             data['x_' + category] = data['x_' + category][:n_obs]

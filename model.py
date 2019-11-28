@@ -36,6 +36,7 @@ class GraphConvNet(nn.Module):
 class GWNet(nn.Module):
     def __init__(self, device, num_nodes, dropout=0.3, supports=None, do_graph_conv=True,
                  addaptadj=True, aptinit=None, in_dim=2, out_dim=12, residual_channels=32, dilation_channels=32,
+                 n_cat_feat=1,
                  skip_channels=256, end_channels=512, kernel_size=2, blocks=4, layers=2, apt_size=10):
         super().__init__()
         self.dropout = dropout
@@ -51,8 +52,12 @@ class GWNet(nn.Module):
         self.skip_convs = nn.ModuleList()
         self.bn = nn.ModuleList()
         self.graph_convs = nn.ModuleList()
+        self.cat_layer = nn.Linear(n_cat_feat, skip_channels)
 
         self.start_conv = nn.Conv2d(in_channels=in_dim,
+                                    out_channels=residual_channels,
+                                    kernel_size=(1,1))
+        self.start_traffic_conv = nn.Conv2d(in_channels=in_dim,
                                     out_channels=residual_channels,
                                     kernel_size=(1,1))
         self.supports = supports
@@ -120,14 +125,18 @@ class GWNet(nn.Module):
 
         self.receptive_field = receptive_field
 
-    def forward(self, input):
+    def forward(self, x):
         # Input shape is (bs, features, n_nodes, n_timesteps)
-        in_len = input.size(3)
-        if in_len<self.receptive_field:
-            x = nn.functional.pad(input, (self.receptive_field - in_len,0,0,0))
-        else:
-            x = input
-        x = self.start_conv(x)
+
+        in_len = x.size(3)
+        if in_len < self.receptive_field:
+            x = nn.functional.pad(x, (self.receptive_field - in_len, 0, 0, 0))
+        f1, f2 = x[:,[0]], x[:,[1]]
+        #fproc = F.glu(self.cat_layer(f2))
+        #torch.stack([fproc[:, :256]] * 207)
+        x1 = self.start_conv(f1)
+        x2 = self.start_traffic_conv(f2)
+        x = x1 + x2
         skip = 0
 
         # calculate the current adaptive adj matrix once per iteration
@@ -144,7 +153,7 @@ class GWNet(nn.Module):
             #            |----------------------------------------|     *residual*
             #            |                                        |
             #            |   |-dil_conv -- tanh --|                |
-            #         ---|                  * ----|-- 1x1 -- + -->	*input*
+            #         ---|                  * ----|-- 1x1 -- + -->	*x_in*
             #                |-dil_conv -- sigm --|    |
             #                                         1x1
             #                                          |
@@ -168,7 +177,7 @@ class GWNet(nn.Module):
                 x = self.graph_convs[i](x, support)
             else:
                 x = self.residual_convs[i](x)
-            x = x + residual[:, :, :, -x.size(3):] # TODO(SS): Mean/Max Pool?
+            x = x + residual[:, :, :, -x.size(3):]  # TODO(SS): Mean/Max Pool?
             x = self.bn[i](x)
 
         x = F.relu(skip)  # ignore last X?
