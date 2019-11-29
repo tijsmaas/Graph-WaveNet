@@ -144,7 +144,7 @@ class GWNet(nn.Module):
                 break
 
             if self.do_graph_conv:
-                x = self.graph_convs[i](x, adjacency_matrices)
+                x = x + self.graph_convs[i](x, adjacency_matrices)
             else:
                 x = self.residual_convs[i](x)
             x = x + residual[:, :, :, -x.size(3):]  # TODO(SS): Mean/Max Pool?
