@@ -101,8 +101,8 @@ class GWNet(nn.Module):
         x = self.start_conv(input)
         skip = 0
         adjacency_matrices = self.fixed_supports
-        # calculate the current adaptive adj matrix once per iteration
-        if self.addaptadj:
+
+        if self.addaptadj:  # calculate the current adaptive adj matrix once per iteration
             adp = F.softmax(F.relu(torch.mm(self.nodevec1, self.nodevec2)), dim=1)
             adjacency_matrices = self.fixed_supports + [adp]
 
@@ -134,7 +134,7 @@ class GWNet(nn.Module):
                 break
 
             if self.do_graph_conv:
-                x = self.graph_convs[i](x, adjacency_matrices)
+                x = x + self.graph_convs[i](x, adjacency_matrices)
             else:
                 x = self.residual_convs[i](x)
             x = x + residual[:, :, :, -x.size(3):] # TODO(SS): Mean/Max Pool?
