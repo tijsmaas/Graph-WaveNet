@@ -30,10 +30,11 @@ def main(args):
     if args.aptonly:
         if not args.addaptadj: print('WARNING: not using adjacency matrix')
         supports = None
-    engine = Trainer(scaler, args.in_dim, args.seq_length, args.num_nodes, args.nhid, args.dropout,
-                     args.learning_rate, args.weight_decay, device, supports, args.do_graph_conv,
-                     args.addaptadj, adjinit, apt_size=args.apt_size)
+    trainer = Trainer(scaler, args.in_dim, args.seq_length, args.num_nodes, args.nhid, args.dropout,
+                      args.learning_rate, args.weight_decay, device, supports, args.do_graph_conv,
+                      args.addaptadj, adjinit, apt_size=args.apt_size)
     print("start training...", flush=True)
+    print(f'Num trainable parameters: {util.calc_trainable_params(trainer.model)}')
     metrics, train_time = [], []
     best_yet = 100
     mb = master_bar(list(range(1, args.epochs + 1)))
@@ -49,7 +50,7 @@ def main(args):
         for iter, (x, y) in enumerate(dataloader['train_loader'].get_iterator()):
             trainx = torch.Tensor(x).to(device).transpose(1, 3)
             trainy = torch.Tensor(y).to(device).transpose(1, 3)
-            loss, mape, rmse = engine.train(trainx, trainy[:, 0, :, :])
+            loss, mape, rmse = trainer.train(trainx, trainy[:, 0, :, :])
             train_loss.append(loss)
             train_mape.append(mape)
             train_rmse.append(rmse)
@@ -57,7 +58,7 @@ def main(args):
                 break
         train_time.append(time.time() - t1)
         total_time, valid_loss, valid_mape, valid_rmse = eval_(dataloader['val_loader'], device,
-                                                               engine)
+                                                               trainer)
 
         m = pd.Series(dict(train_loss=np.mean(train_loss),
                            train_mape=np.mean(train_mape),
@@ -69,16 +70,16 @@ def main(args):
         metrics.append(m)
         print(m.round(4))
         if m.valid_loss < best_yet:
-            torch.save(engine.model.state_dict(), best_model_save_path)
+            torch.save(trainer.model.state_dict(), best_model_save_path)
             best_yet = m.valid_loss
         met_df = pd.DataFrame(metrics)
         met_df.round(4).to_csv(f'{args.save}/metrics.csv')
     print(f"Training finished. Best Valid Loss")
     print(met_df.loc[met_df.valid_loss.idxmin()].round(4))
     # Metrics on test data
-    engine.model.load_state_dict(torch.load(best_model_save_path))
+    trainer.model.load_state_dict(torch.load(best_model_save_path))
     realy = torch.Tensor(dataloader['y_test']).transpose(1, 3)[:, 0, :, :].to(device)
-    test_met_df, yhat = calc_test_metrics(engine.model, device, dataloader['test_loader'], scaler,
+    test_met_df, yhat = calc_test_metrics(trainer.model, device, dataloader['test_loader'], scaler,
                                           realy)
     test_met_df.round(4).to_csv(os.path.join(args.save, 'test_metrics.csv'))
     print(test_met_df.mean().round(3))

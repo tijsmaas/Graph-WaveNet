@@ -9,6 +9,12 @@ from scipy.sparse import linalg
 
 DEFAULT_DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
+
+def calc_trainable_params(model):
+    model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+    params = sum([np.prod(p.size()) for p in model_parameters])
+    return params
+
 class DataLoader(object):
     def __init__(self, xs, ys, batch_size, pad_with_last_sample=True):
         """
