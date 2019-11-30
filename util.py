@@ -201,7 +201,7 @@ def calc_test_metrics(model, device, test_loader, scaler, realy):
         pred = torch.clamp(pred, min=0., max=70.)
         real = realy[:, :, i]
         test_met.append([x.item() for x in cheaper_metric(pred, real)])
-    test_met_df = pd.DataFrame(test_met, columns=['mae', 'mape', 'rmse']).rename_axis('t').round(3)
+    test_met_df = pd.DataFrame(test_met, columns=['mae', 'mape', 'rmse']).rename_axis('t')
     return test_met_df, yhat
 
 
@@ -211,7 +211,7 @@ def _to_ser(arr):
 
 def make_pred_df(realy, yhat, scaler):
     df = pd.DataFrame(dict(y12=_to_ser(realy[:, :, 11]),
-                           yhat12=_to_ser(scaler.inverse_transform(yhat[:, :, 11])).clip(0, 70),
+                           yhat12=_to_ser(scaler.inverse_transform(yhat[:, :, 11])),
                            y3=_to_ser(realy[:, :, 2]),
-                           yhat3=_to_ser(scaler.inverse_transform(yhat[:, :, 2])).clip(0, 70)))
+                           yhat3=_to_ser(scaler.inverse_transform(yhat[:, :, 2]))))
     return df
