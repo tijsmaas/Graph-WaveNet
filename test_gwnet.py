@@ -40,7 +40,11 @@ class TestTrain(unittest.TestCase):
         state_dict = torch.load(test_args.checkpoint)
         self.assertTrue('nodevec1' in state_dict)
         self.assertTrue(os.path.exists(test_args.checkpoint))
-        new_met, new_preds = test.main(test_args)
+        new_met, pred_df = test.main(test_args)
+        p2 = pred_df.loc[pred_df['y12'] != 0]
+        pandas_mae = (p2.y12 - p2.yhat12).abs().mean()
+        self.assertAlmostEqual(pandas_mae, new_met.loc[11, 'mae'], 4)
+
         #import ipdb; ipdb.set_trace()
         #new_met = pd.read_csv('last_test_metrics.csv', index_col=0)
         deltas = test_df.mean() - new_met.mean()
