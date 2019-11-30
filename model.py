@@ -57,6 +57,9 @@ class GWNet(nn.Module):
                                     kernel_size=(1,1))
         self.fixed_supports = supports or []
         receptive_field = 1
+        assert aptinit is not None
+        assert addaptadj
+        assert do_graph_conv
 
         self.supports_len = len(self.fixed_supports)
         if do_graph_conv and addaptadj:
@@ -64,13 +67,19 @@ class GWNet(nn.Module):
                 nodevec1 = torch.randn(num_nodes, apt_size)
                 nodevec2 = torch.randn(apt_size, num_nodes)
             else:
+                nodevec1 = torch.randn(num_nodes, apt_size)
+                nodevec2 = torch.randn(apt_size, num_nodes)
                 m, p, n = torch.svd(aptinit)
-                nodevec1 = torch.mm(m[:, :apt_size], torch.diag(p[:apt_size] ** 0.5))
-                nodevec2 = torch.mm(torch.diag(p[:apt_size] ** 0.5), n[:, :apt_size].t())
-            self.supports_len += 1
+                nodevec3 = torch.mm(m[:, :apt_size], torch.diag(p[:apt_size] ** 0.5))
+                nodevec4 = torch.mm(torch.diag(p[:apt_size] ** 0.5), n[:, :apt_size].t())
+            self.supports_len += 2
             
             self.register_parameter('nodevec1', nn.Parameter(nodevec1.to(device), requires_grad=True))
             self.register_parameter('nodevec2', nn.Parameter(nodevec2.to(device), requires_grad=True))
+            self.register_parameter('nodevec3',
+                                    nn.Parameter(nodevec3.to(device), requires_grad=True))
+            self.register_parameter('nodevec4',
+                                    nn.Parameter(nodevec4.to(device), requires_grad=True))
         if do_graph_conv:
             self.graph_convs = nn.ModuleList([GraphConvNet(dilation_channels, residual_channels, dropout, support_len=self.supports_len) for i in range(blocks*layers)])
         for b in range(blocks):
@@ -104,7 +113,8 @@ class GWNet(nn.Module):
         # calculate the current adaptive adj matrix once per iteration
         if self.addaptadj:
             adp = F.softmax(F.relu(torch.mm(self.nodevec1, self.nodevec2)), dim=1)
-            adjacency_matrices = self.fixed_supports + [adp]
+            ad2 = F.softmax(F.relu(torch.mm(self.nodevec3, self.nodevec4)), dim=1)
+            adjacency_matrices = self.fixed_supports + [adp, ad2]
 
         # WaveNet layers
         for i in range(self.blocks * self.layers):
