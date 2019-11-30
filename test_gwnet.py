@@ -11,6 +11,14 @@ import shutil
 TRAIN_ARGS = 'test_args.pkl'
 TEST_ARGS = 'test_script_args.pkl'
 SAVE_DIR = 'utest_experiment/'
+ARG_UPDATES = {'epochs': 1, 'n_iters': 1, 'batch_size': 2, 'n_obs': 2,
+               'device': util.DEFAULT_DEVICE, 'save': SAVE_DIR, 'addaptadj': True,
+               'apt_size': 2, 'nhid': 1, 'in_dim': 1}
+
+def modify_args(args, updates):
+    for k,v in updates.items():
+        setattr(args, k, v)
+    return args
 
 class TestTrain(unittest.TestCase):
 
@@ -21,30 +29,19 @@ class TestTrain(unittest.TestCase):
         os.makedirs(SAVE_DIR)
 
     def test_1_epoch(self):
-        args = pickle_load(TRAIN_ARGS)
-        args.epochs = 1
-        args.n_iters = 1
-        args.batch_size = 2
-        args.in_dim = 1
-        args.n_obs = 2
-        args.save = SAVE_DIR
-        args.device = util.DEFAULT_DEVICE
-        args.addaptadj = True
-        args.apt_size = 5
+        args = modify_args(pickle_load(TRAIN_ARGS), ARG_UPDATES)
         main(args)
         df = pd.read_csv(f'{args.save}/metrics.csv', index_col=0)
         self.assertEqual(df.shape, (args.epochs, 6))
         test_df = pd.read_csv(f'{args.save}/test_metrics.csv', index_col=0)
         self.assertEqual(test_df.shape, (12, 3))
-        test_args = pickle_load(TEST_ARGS)
-        test_args.in_dim = 1
-        test_args.apt_size = 5
+        test_args = modify_args(pickle_load(TEST_ARGS), ARG_UPDATES)
         test_args.checkpoint = SAVE_DIR + '/best_model.pth'
         state_dict = torch.load(test_args.checkpoint)
-        assert 'nodevec1' in state_dict
+        self.assertTrue('nodevec1' in state_dict)
         self.assertTrue(os.path.exists(test_args.checkpoint))
-        test_args.n_obs = 2
-        test.main(test_args)
-        new_met = pd.read_csv('last_test_metrics.csv', index_col=0)
+        new_met, new_preds = test.main(test_args)
+        #import ipdb; ipdb.set_trace()
+        #new_met = pd.read_csv('last_test_metrics.csv', index_col=0)
         deltas = test_df.mean() - new_met.mean()
         self.assertGreaterEqual(.01, deltas.abs().max())
