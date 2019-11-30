@@ -53,6 +53,7 @@ class GWNet(nn.Module):
         self.bn = nn.ModuleList()
         self.graph_convs = nn.ModuleList()
         self.cat_layer = nn.Linear(n_cat_feat, skip_channels)
+        assert in_dim == 1, 'Current implementation requires in_dim=1'
 
         self.start_conv = nn.Conv2d(in_channels=in_dim,
                                     out_channels=residual_channels,
