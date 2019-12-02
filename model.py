@@ -66,7 +66,7 @@ class GWNet(nn.Module):
         # 1x1 convolution for residual and skip connections (slightly different see docstring)
         self.residual_convs = ModuleList([Conv1d(dilation_channels, residual_channels, (1, 1)) for _ in depth])
         self.skip_convs = ModuleList([Conv1d(dilation_channels, skip_channels, (1, 1)) for _ in depth])
-        self.bn = ModuleList([BatchNorm2d(residual_channels) for _ in depth])
+        # self.bn = ModuleList([BatchNorm2d(residual_channels) for _ in depth])
         self.graph_convs = ModuleList([GraphConvNet(dilation_channels, residual_channels, dropout, support_len=self.supports_len)
                                               for _ in depth])
 
@@ -148,7 +148,7 @@ class GWNet(nn.Module):
             else:
                 x = self.residual_convs[i](x)
             x = x + residual[:, :, :, -x.size(3):] # TODO(SS): Mean/Max Pool?
-            x = self.bn[i](x)
+            # x = self.bn[i](x)
 
         x = F.relu(skip)  # ignore last X?
         x = F.relu(self.end_conv_1(x))
