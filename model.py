@@ -73,7 +73,7 @@ class GWNet(nn.Module):
         self.bn = ModuleList([BatchNorm2d(residual_channels) for _ in depth])
         self.graph_convs = ModuleList([GraphConvNet(dilation_channels, residual_channels, dropout, support_len=self.supports_len)
                                               for _ in depth])
-        self.encoder_layer = nn.TransformerEncoderLayer(13, 1, dim_feedforward=2048,
+        self.encoder_layer = nn.TransformerEncoderLayer(13, 1, dim_feedforward=128,
                                                         dropout=dropout)
 
         self.filter_convs = ModuleList()
