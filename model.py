@@ -116,11 +116,13 @@ class GWNet(nn.Module):
         if in_len < self.receptive_field:
             x = nn.functional.pad(x, (self.receptive_field - in_len, 0, 0, 0))
         f1, f2 = x[:,[0]], x[:,[1]]
-        x1 = self.start_conv(f1)
+
+        f1b = self.encoder_layer(f1.view(f1.shape[0] * f1.shape[1], f1.shape[2], f1.shape[3]))
+        x1 = self.start_conv(f1b.view(*f1.shape))
         x2 = F.leaky_relu(self.cat_feature_conv(f2))
-        xadd = x1 + x2
-        x = self.encoder_layer(xadd.view(xadd.shape[0]*xadd.shape[1], xadd.shape[2], xadd.shape[3]))
-        x = x.view(*xadd.shape)
+        x = x1 + x2
+
+
         skip = 0
         adjacency_matrices = self.fixed_supports
         # calculate the current adaptive adj matrix once per iteration
