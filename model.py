@@ -55,12 +55,15 @@ class GWNet(nn.Module):
         self.supports_len = len(self.fixed_supports)
         if do_graph_conv and addaptadj:
             if aptinit is None:
-                nodevec1, nodevec2 = torch.randn(num_nodes, apt_size), torch.randn(apt_size, num_nodes)
+                self.adj_matrix = Parameter(torch.randn(num_nodes, num_nodes), requires_grad=True)
+                nn.init.kaiming_uniform_(self.adj_matrix)
+                assert 'adj_matrix' in self.state_dict()
+
             else:
                 nodevec1, nodevec2 = self.svd_init(apt_size, aptinit)
+                self.register_parameter('nodevec1', Parameter(nodevec1.to(device), requires_grad=True))
+                self.register_parameter('nodevec2', Parameter(nodevec2.to(device), requires_grad=True))
             self.supports_len += 1
-            self.register_parameter('nodevec1', Parameter(nodevec1.to(device), requires_grad=True))
-            self.register_parameter('nodevec2', Parameter(nodevec2.to(device), requires_grad=True))
 
         depth = list(range(blocks * layers))
 
@@ -87,7 +90,9 @@ class GWNet(nn.Module):
 
         self.end_conv_1 = Conv2d(skip_channels, end_channels, (1, 1), bias=True)
         self.end_conv_2 = Conv2d(end_channels, out_dim, (1, 1), bias=True)
+    def kaiming_init(self):
 
+        nn.init.kaiming_normal_(self.end_conv_1.weight, mode='fan_out')
     @staticmethod
     def svd_init(apt_size, aptinit):
         m, p, n = torch.svd(aptinit)
@@ -114,7 +119,7 @@ class GWNet(nn.Module):
         adjacency_matrices = self.fixed_supports
         # calculate the current adaptive adj matrix once per iteration
         if self.addaptadj:
-            adp = F.softmax(F.relu(torch.mm(self.nodevec1, self.nodevec2)) / self.softmax_temp, dim=1)
+            adp = F.softmax(F.relu(self.adj_matrix) / self.softmax_temp, dim=1)
             adjacency_matrices = self.fixed_supports + [adp]
 
         # WaveNet layers
