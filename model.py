@@ -119,7 +119,8 @@ class GWNet(nn.Module):
         x1 = self.start_conv(f1)
         x2 = F.leaky_relu(self.cat_feature_conv(f2))
         xadd = x1 + x2
-        x = self.encoder_layer(xadd.squeeze(1)).unsqueeze(1)
+        x = self.encoder_layer(xadd.view(xadd.shape[0]*xadd.shape[1], xadd.shape[2], xadd.shape[3]))
+        x = x.view(*xadd.shape)
         skip = 0
         adjacency_matrices = self.fixed_supports
         # calculate the current adaptive adj matrix once per iteration
