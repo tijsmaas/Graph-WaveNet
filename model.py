@@ -46,7 +46,7 @@ class GWNet(nn.Module):
         self.do_graph_conv = do_graph_conv
         self.addaptadj = addaptadj
 
-        self.start_conv = nn.Conv2d(in_channels=in_dim,
+        self.start_conv = nn.Conv2d(in_channels=1, # hard code to avoid errors
                                     out_channels=residual_channels,
                                     kernel_size=(1, 1))
 
