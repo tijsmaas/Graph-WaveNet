@@ -103,7 +103,7 @@ class GWNet(nn.Module):
         adjacency_matrices = self.fixed_supports
         # calculate the current adaptive adj matrix once per iteration
         if self.addaptadj:
-            adp = F.softmax(F.relu(torch.mm(self.nodevec1, self.nodevec2)), dim=1)
+            adp = F.softmax(F.gelu(torch.mm(self.nodevec1, self.nodevec2)), dim=1)
             adjacency_matrices = self.fixed_supports + [adp]
 
         # WaveNet layers
@@ -140,8 +140,8 @@ class GWNet(nn.Module):
             x = x + residual[:, :, :, -x.size(3):] # TODO(SS): Mean/Max Pool?
             x = self.bn[i](x)
 
-        x = F.relu(skip)  # ignore last X?
-        x = F.relu(self.end_conv_1(x))
+        x = F.gelu(skip)  # ignore last X?
+        x = F.gelu(self.end_conv_1(x))
         x = self.end_conv_2(x)
         return x
 
