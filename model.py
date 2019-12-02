@@ -73,8 +73,14 @@ class GWNet(nn.Module):
         self.bn = ModuleList([BatchNorm2d(residual_channels) for _ in depth])
         self.graph_convs = ModuleList([GraphConvNet(dilation_channels, residual_channels, dropout, support_len=self.supports_len)
                                               for _ in depth])
-        self.encoder_layer = nn.TransformerEncoderLayer(13, 1, dim_feedforward=2048,
-                                                        dropout=dropout)
+        #self.encoder_layer = nn.TransformerEncoderLayer(13, 1, dim_feedforward=2048,
+        #                                          dropout=dropout)
+
+        shapes = [13, 12, 10, 9, 7, 6, 4, 3]
+        assert (blocks * layers) == len(shapes)
+        self.encoders = ModuleList([nn.TransformerEncoderLayer(s, 1, dim_feedforward=2048,
+                                                        dropout=dropout) for s in shapes])
+
 
         self.filter_convs = ModuleList()
         self.gate_convs = ModuleList()
@@ -118,8 +124,7 @@ class GWNet(nn.Module):
         f1, f2 = x[:,[0]], x[:,[1]]
         x1 = self.start_conv(f1)
         x2 = F.leaky_relu(self.cat_feature_conv(f2))
-        xadd = x1 + x2
-        x = self.encoder_layer(xadd.squeeze(1)).unsqueeze(1)
+        x = x1 + x2
         skip = 0
         adjacency_matrices = self.fixed_supports
         # calculate the current adaptive adj matrix once per iteration
@@ -140,9 +145,10 @@ class GWNet(nn.Module):
             #                                          |
             # ---------------------------------------> + ------------->	*skip*
             residual = x
+            r2 = self.encoders[i](x.squeeze(1)).unsqueeze(1)
             # dilated convolution
-            filter = torch.tanh(self.filter_convs[i](residual))
-            gate = torch.sigmoid(self.gate_convs[i](residual))
+            filter = torch.tanh(self.filter_convs[i](r2))
+            gate = torch.sigmoid(self.gate_convs[i](r2))
             x = filter * gate
             # parametrized skip connection
             s = self.skip_convs[i](x)  # what are we skipping??
