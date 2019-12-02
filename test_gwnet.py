@@ -16,6 +16,7 @@ ARG_UPDATES = {'epochs': 1, 'n_iters': 1, 'batch_size': 2, 'n_obs': 2,
                'apt_size': 2, 'nhid': 1, 'softmax_temp': 1., 'lr_decay_rate': 1.,
                'in_dim': 1}
 
+
 def modify_args(args, updates):
     for k,v in updates.items():
         setattr(args, k, v)
