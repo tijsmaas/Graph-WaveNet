@@ -1,5 +1,4 @@
 import util
-import argparse
 from model import *
 import numpy as np
 import pandas as pd
@@ -18,18 +17,12 @@ def main(args, **model_kwargs):
 
     if args.aptonly:
         supports = None
-
-    # model = GWNet(device, args.num_nodes, args.dropout,
-    #               supports=supports, do_graph_conv=args.do_graph_conv,
-    #               addaptadj=args.addaptadj, aptinit=adjinit, apt_size=args.apt_size,
-    #
-    #
-    #               )
-    model = GWNet(device, args.num_nodes, args.dropout, supports=supports,
-                  do_graph_conv=args.do_graph_conv, addaptadj=args.addaptadj, aptinit=adjinit,
-                  in_dim=args.in_dim, apt_size=args.apt_size, out_dim=args.seq_length,
-                  residual_channels=args.nhid, dilation_channels=args.nhid,
-                  skip_channels=args.nhid * 8, end_channels=args.nhid * 16, **model_kwargs)
+    model = GWNet.from_args(args, device, supports, adjinit, **model_kwargs)
+    # model = GWNet(device, args.num_nodes, args.dropout, supports=supports,
+    #               do_graph_conv=args.do_graph_conv, addaptadj=args.addaptadj, aptinit=adjinit,
+    #               in_dim=args.in_dim, apt_size=args.apt_size, out_dim=args.seq_length,
+    #               residual_channels=args.nhid, dilation_channels=args.nhid,
+    #               skip_channels=args.nhid * 8, end_channels=args.nhid * 16, **model_kwargs)
     model.to(device)
     model.load_state_dict(torch.load(args.checkpoint))
     model.eval()
@@ -44,8 +37,7 @@ def main(args, **model_kwargs):
     df2.to_csv('./wave.csv', index=False)
 
 
-    if args.plotheatmap == "True":
-        plot_learned_adj_matrix(model)
+    if args.plotheatmap: plot_learned_adj_matrix(model)
     return met_df, df2
 
 def plot_learned_adj_matrix(model):
@@ -58,27 +50,8 @@ def plot_learned_adj_matrix(model):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--device', type=str, default='cuda:0', help='')
-    parser.add_argument('--data', type=str, default='data/METR-LA', help='data path')
-    parser.add_argument('--adjdata', type=str, default='data/sensor_graph/adj_mx.pkl',
-                        help='adj data path')
-    parser.add_argument('--adjtype', type=str, default='doubletransition', help='adj type')
-    parser.add_argument('--do_graph_conv', action='store_true',
-                        help='whether to add graph convolution layer')
-    parser.add_argument('--aptonly', action='store_true', help='whether only adaptive adj')
-    parser.add_argument('--addaptadj', action='store_true', help='whether add adaptive adj')
-    parser.add_argument('--randomadj', action='store_true',
-                        help='whether random initialize adaptive adj')
-    parser.add_argument('--seq_length', type=int, default=12, help='')
-    parser.add_argument('--nhid', type=int, default=32, help='')
-    parser.add_argument('--in_dim', type=int, default=2, help='inputs dimension')
-    parser.add_argument('--num_nodes', type=int, default=207, help='number of nodes')
-    parser.add_argument('--batch_size', type=int, default=64, help='batch size')
-    parser.add_argument('--dropout', type=float, default=0.3, help='dropout rate')
-    # parser.add_argument('--weight_decay', type=float, default=0.0001, help='weight decay rate')
+    parser = util.get_shared_arg_parser()
     parser.add_argument('--checkpoint', type=str, help='')
     parser.add_argument('--plotheatmap', action='store_true')
-    parser.add_argument('--n_obs', default=None, help='Only use this many observations')
     args = parser.parse_args()
     main(args)

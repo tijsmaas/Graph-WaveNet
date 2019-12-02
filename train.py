@@ -29,13 +29,9 @@ def main(args, **model_kwargs):
         if not args.addaptadj: raise ValueError('WARNING: not using adjacency matrix')
         supports = None
 
-    model = GWNet(device, args.num_nodes, args.dropout, supports=supports,
-                  do_graph_conv=args.do_graph_conv, addaptadj=args.addaptadj, aptinit=aptinit,
-                  in_dim=args.in_dim, apt_size=args.apt_size, out_dim=args.seq_length,
-                  residual_channels=args.nhid, dilation_channels=args.nhid,
-                  skip_channels=args.nhid * 8, end_channels=args.nhid * 16, **model_kwargs)
+    model = GWNet.from_args(args, device, supports, aptinit, **model_kwargs)
     model.to(device)
-    engine = Trainer(model, scaler, args.learning_rate, args.weight_decay)
+    engine = Trainer(model, scaler, args.learning_rate, args.weight_decay, args.lr_decay_rate)
     print("start training...", flush=True)
     metrics, train_time = [], []
     best_model_save_path = os.path.join(args.save, 'best_model.pth')
@@ -67,13 +63,14 @@ def main(args, **model_kwargs):
                  train_rmse=np.mean(train_rmse), valid_loss=np.mean(valid_loss),
                  valid_mape=np.mean(valid_mape), valid_rmse=np.mean(valid_rmse))
         m = pd.Series(m)
-        mb.comment = f'valid_loss: {m.valid_loss: .3f}'
+
         metrics.append(m)
         print(m.round(4))
         if m.valid_loss < lowest_mae_yet:
             torch.save(engine.model.state_dict(), best_model_save_path)
             lowest_mae_yet = m.valid_loss
         met_df = pd.DataFrame(metrics)
+        mb.comment = f'valid_loss: {met_df.valid_loss.min(): .3f}'
         met_df.round(4).to_csv(f'{args.save}/metrics.csv')
     print(f"Training finished. Best Valid Loss:")
     print(met_df.loc[met_df.valid_loss.idxmin()].round(4))
@@ -106,40 +103,18 @@ def eval_(ds, device, engine):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--device', type=str, default='cuda:0', help='')
-    parser.add_argument('--data', type=str, default='data/METR-LA', help='data path')
-    parser.add_argument('--adjdata', type=str, default='data/sensor_graph/adj_mx.pkl',
-                        help='adj data path')
-    parser.add_argument('--adjtype', type=str, default='doubletransition', help='adj type')
-    parser.add_argument('--do_graph_conv', action='store_true',
-                        help='whether to add graph convolution layer')
-    parser.add_argument('--aptonly', action='store_true', help='whether only adaptive adj')
-    parser.add_argument('--addaptadj', action='store_true', help='whether add adaptive adj')
-    parser.add_argument('--randomadj', action='store_true',
-                        help='whether random initialize adaptive adj')
-    parser.add_argument('--seq_length', type=int, default=12, help='')
-    parser.add_argument('--nhid', type=int, default=32, help='')
-    parser.add_argument('--in_dim', type=int, default=2, help='inputs dimension')
-    parser.add_argument('--num_nodes', type=int, default=207, help='number of nodes')
-    parser.add_argument('--batch_size', type=int, default=64, help='batch size')
-    parser.add_argument('--learning_rate', type=float, default=0.001, help='learning rate')
-    parser.add_argument('--dropout', type=float, default=0.3, help='dropout rate')
-    parser.add_argument('--weight_decay', type=float, default=0.0001, help='weight decay rate')
+    parser = util.get_shared_arg_parser()
     parser.add_argument('--epochs', type=int, default=100, help='')
-    # parser.add_argument('--print_every', type=int, default=50, help='')
-    # parser.add_argument('--seed',type=int,default=99,help='random seed')
-    parser.add_argument('--save', type=str, default='experiment', help='save path')
-    # parser.add_argument('--expid', default=1, help='experiment id')
-    parser.add_argument('--n_iters', default=None, help='quit after this many iterations')
-    parser.add_argument('--n_obs', default=None, help='Only use this many observations')
-    parser.add_argument('--apt_size', default=10, type=int)
+    parser.add_argument('--weight_decay', type=float, default=0.0001, help='weight decay rate')
+    parser.add_argument('--learning_rate', type=float, default=0.001, help='learning rate')
+    parser.add_argument('--lr_decay_rate', type=float, default=0.97, help='learning rate')
 
+    parser.add_argument('--save', type=str, default='experiment', help='save path')
+    parser.add_argument('--n_iters', default=None, help='quit after this many iterations')
     args = parser.parse_args()
     t1 = time.time()
     if not os.path.exists(args.save):
         os.mkdir(args.save)
-
     pickle_save(args, f'{args.save}/args.pkl')
     main(args)
     t2 = time.time()
