@@ -62,6 +62,7 @@ class GWNet(nn.Module):
 
         self.fixed_supports = supports or []
         receptive_field = 1
+        self.node_bias = nn.Parameter(torch.zeros(1, 1, num_nodes, 1).to(device), requires_grad=True)
 
         self.supports_len = len(self.fixed_supports)
         if do_graph_conv and addaptadj:
@@ -173,6 +174,7 @@ class GWNet(nn.Module):
         x = F.relu(skip)  # ignore last X?
         x = F.relu(self.end_conv_1(x))
         x = self.end_conv_2(x)  # downsample to (bs, 12, 207, nfeatures)
+        x = x + self.node_bias
         return x
 
 
