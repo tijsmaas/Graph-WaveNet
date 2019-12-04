@@ -71,7 +71,7 @@ def generate_train_val_test(args):
         x_offsets=x_offsets,
         y_offsets=y_offsets,
         add_time_in_day=True,
-        add_day_in_week=False,
+        add_day_in_week=args.dow,
     )
 
     print("x shape: ", x.shape, ", y shape: ", y.shape)
@@ -127,6 +127,12 @@ if __name__ == "__main__":
         default=12,
         help="Sequence Length.",
     )
+    parser.add_argument(
+        "--dow",
+        action='store_true',
+        #type=bool,
+    )
+
     args = parser.parse_args()
     if not os.path.exists(args.output_dir):
       reply = str(input(f'{args.output_dir} does not exist. Do you want to create it? (y/n)')).lower().strip()
