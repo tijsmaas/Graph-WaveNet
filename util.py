@@ -212,10 +212,10 @@ def _to_ser(arr):
 
 
 def make_pred_df(realy, yhat, scaler, seq_length):
-    df = pd.DataFrame(dict(y12=_to_ser(realy[:, :, seq_length - 1]),
-                           yhat12=_to_ser(scaler.inverse_transform(yhat[:, :, seq_length - 1])),
-                           y3=_to_ser(realy[:, :, 2]),
-                           yhat3=_to_ser(scaler.inverse_transform(yhat[:, :, 2]))))
+    df = pd.DataFrame(dict(y_last=_to_ser(realy[:, :, seq_length - 1]),
+                           yhat_last=_to_ser(scaler.inverse_transform(yhat[:, :, seq_length - 1])),
+                           y_3=_to_ser(realy[:, :, 2]),
+                           yhat_3=_to_ser(scaler.inverse_transform(yhat[:, :, 2]))))
     return df
 
 
