@@ -28,7 +28,7 @@ class Trainer():
         self.clip = clip
         self.fp16 = fp16
         #l1 = lambda epoch: lr_decay_rate ** epoch
-        self.scheduler = optim.lr_scheduler.CyclicLR(self.optimizer, base_lr=lrate/10, max_lr=lrate)
+        self.scheduler = optim.lr_scheduler.CyclicLR(self.optimizer, base_lr=lrate/10, max_lr=lrate,cycle_momentum=False)
         if self.fp16:
             try:
                 from apex import amp  # Apex is only required if we use fp16 training
