@@ -42,10 +42,12 @@ def main(args, **model_kwargs):
                 break
         engine.scheduler.step()
         _, valid_loss, valid_mape, valid_rmse = eval_(data['val_loader'], device, engine)
-
-        m = dict(train_loss=np.mean(train_loss), train_mape=np.mean(train_mape),
-                 train_rmse=np.mean(train_rmse), valid_loss=np.mean(valid_loss),
-                 valid_mape=np.mean(valid_mape), valid_rmse=np.mean(valid_rmse))
+        _, test_loss, test_mape, test_rmse = eval_(data['test_loader'], device, engine)
+        mn = np.mean
+        m = dict(train_loss=mn(train_loss), train_mape=mn(train_mape), train_rmse=mn(train_rmse),
+                 valid_loss=mn(valid_loss),  valid_mape=mn(valid_mape), valid_rmse=mn(valid_rmse),
+                 test_loss=mn(test_loss), test_mape=mn(test_mape), test_rmse=mn(test_rmse))
+  
         m = pd.Series(m)
         metrics.append(m)
         if m.valid_loss < lowest_mae_yet:
