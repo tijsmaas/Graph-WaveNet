@@ -9,7 +9,7 @@ from durbango import pickle_save
 from fastprogress import progress_bar
 
 from model import GWNet
-from util import calc_test_metrics
+from util import calc_tstep_metrics
 from exp_results import summary
 
 bk, wk = ['end_conv_2.bias', 'end_conv_2.weight']
@@ -33,6 +33,7 @@ def main(args, **model_kwargs):
     data = util.load_dataset(args.data, args.batch_size, args.batch_size, args.batch_size, n_obs=args.n_obs)
     scaler = data['scaler']
     aptinit, supports = util.make_graph_inputs(args, device)
+    yval = torch.Tensor(data['y_test']).transpose(1, 3)[:, 0, :, :].to(device)
 
     model = GWNet.from_args(args, device, supports, aptinit, **model_kwargs)
     if args.checkpoint:
@@ -44,7 +45,8 @@ def main(args, **model_kwargs):
     lowest_mae_yet = 100  # high value, will get overwritten
     mb = progress_bar(list(range(1, args.epochs + 1)))
     since_best = 0
-    for _ in mb:
+    val_ts_dfs = []
+    for ep in mb:
         train_loss, train_mape, train_rmse = [], [], []
         data['train_loader'].shuffle()
         for iter, (x, y) in enumerate(data['train_loader'].get_iterator()):
@@ -61,6 +63,10 @@ def main(args, **model_kwargs):
         m = dict(train_loss=np.mean(train_loss), train_mape=np.mean(train_mape),
                  train_rmse=np.mean(train_rmse), valid_loss=np.mean(valid_loss),
                  valid_mape=np.mean(valid_mape), valid_rmse=np.mean(valid_rmse))
+        val_met_df, _ = util.calc_tstep_metrics(engine.model, device, data['val_loader'], scaler, yval, args.seq_length)
+        val_met_df['epoch'] = ep
+        val_ts_dfs.append(val_met_df)
+
         if log_test:
             _, test_loss, test_mape, test_rmse = eval_(data['test_loader'], device, engine)
             mn = np.mean
@@ -81,8 +87,8 @@ def main(args, **model_kwargs):
         if since_best >= args.es_patience: break  #
     # Metrics on test data
     engine.model.load_state_dict(torch.load(best_model_save_path))
-    realy = torch.Tensor(data['y_test']).transpose(1, 3)[:, 0, :, :].to(device)
-    test_met_df, yhat = calc_test_metrics(engine.model, device, data['test_loader'], scaler, realy, args.seq_length)
+    y_test = torch.Tensor(data['y_test']).transpose(1, 3)[:, 0, :, :].to(device)
+    test_met_df, yhat = calc_tstep_metrics(engine.model, device, data['test_loader'], scaler, y_test, args.seq_length)
     test_met_df.round(6).to_csv(os.path.join(args.save, 'test_metrics.csv'))
     print(summary(args.save))
 

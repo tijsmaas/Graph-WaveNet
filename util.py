@@ -189,9 +189,9 @@ def mask_and_fillna(loss, mask):
     return torch.mean(loss)
 
 
-def calc_test_metrics(model, device, test_loader, scaler, realy, seq_length) -> pd.DataFrame:
+def calc_tstep_metrics(model, device, test_loader, scaler, realy, seq_length) -> pd.DataFrame:
     outputs = []
-    for _, (x, y) in enumerate(test_loader.get_iterator()):
+    for _, (x, __) in enumerate(test_loader.get_iterator()):
         testx = torch.Tensor(x).to(device).transpose(1, 3)
         with torch.no_grad():
             preds = model(testx).transpose(1, 3)
