@@ -54,14 +54,17 @@ class DataLoader(object):
 
 class StandardScaler():
 
-    def __init__(self, mean, std):
+    def __init__(self, data):
+        mask = (data == 0)
+        assert mask.sum() > 0
+        mean, std = data[~mask].mean(), data[~mask].std()
         self.mean = mean
+        data[mask] = mean
         self.std = std
-        self.fill_val = 58.435
 
     def transform(self, data):
         mask = (data == 0)
-        data[mask] = self.fill_val
+        data[mask] = self.mean
         return (data - self.mean) / self.std
 
     def inverse_transform(self, data):
@@ -155,11 +158,10 @@ def load_dataset(dataset_dir, batch_size, valid_batch_size= None, test_batch_siz
         if n_obs is not None:
             data['x_' + category] = data['x_' + category][:n_obs]
             data['y_' + category] = data['y_' + category][:n_obs]
-    scaler = StandardScaler(mean=data['x_train'][..., 0].mean(), std=data['x_train'][..., 0].std())
+    scaler = StandardScaler(data['x_train'][..., 0])
     # Data format
     for category in ['train', 'val', 'test']:
         data['x_' + category][..., 0] = scaler.transform(data['x_' + category][..., 0])
-
 
     data['train_loader'] = DataLoader(data['x_train'], data['y_train'], batch_size)
     data['val_loader'] = DataLoader(data['x_val'], data['y_val'], valid_batch_size)
