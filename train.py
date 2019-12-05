@@ -33,7 +33,7 @@ def main(args, **model_kwargs):
     data = util.load_dataset(args.data, args.batch_size, args.batch_size, args.batch_size, n_obs=args.n_obs)
     scaler = data['scaler']
     aptinit, supports = util.make_graph_inputs(args, device)
-    yval = torch.Tensor(data['y_test']).transpose(1, 3)[:, 0, :, :].to(device)
+    yval = torch.Tensor(data['y_val']).transpose(1, 3)[:, 0, :, :].to(device)
 
     model = GWNet.from_args(args, device, supports, aptinit, **model_kwargs)
     if args.checkpoint:
