@@ -84,8 +84,11 @@ def main(args, **model_kwargs):
         met_df = pd.DataFrame(metrics)
         mb.comment = f'best val_loss: {met_df.valid_loss.min(): .3f}, current val_loss: {m.valid_loss:.3f}, current train loss: {m.train_loss: .3f}'
         met_df.round(6).to_csv(f'{args.save}/metrics.csv')
+        pd.concat(val_ts_dfs).to_msgpack(f'{args.save}/val_ts_metrics.mp')
         if since_best >= args.es_patience: break  #
+
     # Metrics on test data
+
     engine.model.load_state_dict(torch.load(best_model_save_path))
     y_test = torch.Tensor(data['y_test']).transpose(1, 3)[:, 0, :, :].to(device)
     test_met_df, yhat = calc_tstep_metrics(engine.model, device, data['test_loader'], scaler, y_test, args.seq_length)
