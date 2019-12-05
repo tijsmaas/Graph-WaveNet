@@ -45,7 +45,10 @@ def main(args, **model_kwargs):
     lowest_mae_yet = 100  # high value, will get overwritten
     mb = progress_bar(list(range(1, args.epochs + 1)))
     since_best = 0
-    val_ts_dfs = []
+    val_met_df, _ = util.calc_tstep_metrics(engine.model, device, data['val_loader'], scaler, yval,
+                                            args.seq_length)
+    val_met_df['epoch'] = 0
+    val_ts_dfs = [val_met_df]
     for ep in mb:
         train_loss, train_mape, train_rmse = [], [], []
         data['train_loader'].shuffle()
@@ -64,7 +67,7 @@ def main(args, **model_kwargs):
                  train_rmse=np.mean(train_rmse), valid_loss=np.mean(valid_loss),
                  valid_mape=np.mean(valid_mape), valid_rmse=np.mean(valid_rmse))
         val_met_df, _ = util.calc_tstep_metrics(engine.model, device, data['val_loader'], scaler, yval, args.seq_length)
-        val_met_df['epoch'] = ep
+        val_met_df['epoch'] = ep + 1
         val_ts_dfs.append(val_met_df)
 
         if log_test:
