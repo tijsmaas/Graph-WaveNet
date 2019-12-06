@@ -38,7 +38,7 @@ def main(args, **model_kwargs):
     model = GWNet.from_args(args, device, supports, aptinit, **model_kwargs)
     if args.checkpoint:
         model = surgery(model, args.checkpoint)
-    model.to(device)
+    model.to(device).eval()
     engine = Trainer.from_args(model, scaler, args)
     metrics = []
     best_model_save_path = os.path.join(args.save, 'best_model.pth')
