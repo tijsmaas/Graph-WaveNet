@@ -28,6 +28,7 @@ class GraphConvNet(nn.Module):
 
         h = torch.cat(out, dim=1)
         h = self.final_conv(h)
+        h = F.leaky_relu(h)
         h = F.dropout(h, self.dropout, training=self.training)
         return h
 
