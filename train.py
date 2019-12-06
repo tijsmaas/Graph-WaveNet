@@ -46,7 +46,7 @@ def main(args, **model_kwargs):
     since_best = 0
     for _ in mb:
         train_loss, train_mape, train_rmse = [], [], []
-        data['train_loader'].shuffle()
+        data['train_loader']#.shuffle()
         for iter, (x, y) in enumerate(data['train_loader'].get_iterator()):
             trainx = torch.Tensor(x).to(device).transpose(1, 3)
             trainy = torch.Tensor(y).to(device).transpose(1, 3)
