@@ -13,6 +13,7 @@ class GraphConvNet(nn.Module):
         super().__init__()
         c_in = (order * support_len + 1) * c_in
         self.final_conv = Conv2d(c_in, c_out, (1, 1), padding=(0, 0), stride=(1, 1), bias=True)
+        self.bn = BatchNorm2d(c_out)
         self.dropout = dropout
         self.order = order
 
@@ -28,6 +29,7 @@ class GraphConvNet(nn.Module):
 
         h = torch.cat(out, dim=1)
         h = self.final_conv(h)
+        h = self.bn(h)
         h = F.dropout(h, self.dropout, training=self.training)
         return h
 
@@ -80,6 +82,7 @@ class GWNet(nn.Module):
         self.bn = ModuleList([BatchNorm2d(residual_channels) for _ in depth])
         self.graph_convs = ModuleList([GraphConvNet(dilation_channels, residual_channels, dropout, support_len=self.supports_len)
                                               for _ in depth])
+
 
         self.filter_convs = ModuleList()
         self.gate_convs = ModuleList()
