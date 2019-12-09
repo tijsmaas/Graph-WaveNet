@@ -51,7 +51,7 @@ def main(args, **model_kwargs):
             trainx = torch.Tensor(x).to(device).transpose(1, 3)
             trainy = torch.Tensor(y).to(device).transpose(1, 3)
             yspeed = trainy[:, 0, :, :]
-            if yspeed.max() == 0: continue
+            # if yspeed.max() == 0: continue
             mae, mape, rmse = engine.train(trainx, yspeed)
             train_loss.append(mae)
             train_mape.append(mape)

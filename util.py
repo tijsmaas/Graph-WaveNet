@@ -59,8 +59,8 @@ class StandardScaler():
         self.std = std
 
     def transform(self, data):
-        mask = (data == 0)
-        data[mask] = self.mean
+        # mask = (data == 0)
+        # data[mask] = self.mean
         return (data - self.mean) / self.std
 
     def inverse_transform(self, data):
@@ -82,7 +82,7 @@ def asym_adj(adj):
     rowsum = np.array(adj.sum(1)).flatten()
     d_inv = np.power(rowsum, -1).flatten()
     d_inv[np.isinf(d_inv)] = 0.
-    d_mat= sp.diags(d_inv)
+    d_mat = sp.diags(d_inv)  # 1/D @ adj
     return d_mat.dot(adj).astype(np.float32).todense()
 
 def calculate_normalized_laplacian(adj):
