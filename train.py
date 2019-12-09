@@ -27,12 +27,13 @@ def load_checkpoint(model, state_dict):
     model.load_state_dict(cur_state_dict)
     return model
 
+
 def load_checkpoint_from_different_graph(model, state_dict):
+    """different number of nodes so don't reuse state_dict."""
     state_dict.pop('nodevec1', None)
     state_dict.pop('nodevec2', None)
     model.load_state_dict(state_dict, strict=False)
     return model
-
 
 
 def main(args, **model_kwargs):
@@ -44,7 +45,9 @@ def main(args, **model_kwargs):
 
     model = GWNet.from_args(args, device, supports, aptinit, **model_kwargs)
     if args.checkpoint:
-        model = load_checkpoint(model, torch.load(args.checkpoint))
+        state_dict = torch.load(args.checkpoint)
+        _ = state_dict.pop('nodevec1', None), state_dict.pop('nodevec2', None)
+        model = load_checkpoint(model, state_dict)
     model.to(device)
     engine = Trainer.from_args(model, scaler, args)
     metrics = []
