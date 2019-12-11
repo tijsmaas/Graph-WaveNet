@@ -46,19 +46,9 @@ class GWNet(nn.Module):
         self.do_graph_conv = do_graph_conv
         self.cat_feat_gc = cat_feat_gc
         self.addaptadj = addaptadj
-
-
-        if self.cat_feat_gc:
-            self.start_conv = nn.Conv2d(in_channels=1,  # hard code to avoid errors
-                                        out_channels=residual_channels,
-                                        kernel_size=(1, 1))
-            self.cat_feature_conv = nn.Conv2d(in_channels=1,
-                                              out_channels=residual_channels,
-                                              kernel_size=(1, 1))
-        else:
-            self.start_conv = nn.Conv2d(in_channels=in_dim,
-                                        out_channels=residual_channels,
-                                        kernel_size=(1, 1))
+        self.start_conv = nn.Conv2d(in_channels=in_dim,
+                                    out_channels=residual_channels,
+                                    kernel_size=(1, 1))
 
         self.fixed_supports = supports or []
         receptive_field = 1
@@ -134,13 +124,7 @@ class GWNet(nn.Module):
         in_len = x.size(3)
         if in_len < self.receptive_field:
             x = nn.functional.pad(x, (self.receptive_field - in_len, 0, 0, 0))
-        if self.cat_feat_gc:
-            f1, f2 = x[:,[0]], x[:,[1]]
-            x1 = self.start_conv(f1)
-            x2 = F.leaky_relu(self.cat_feature_conv(f2))
-            x = x1 + x2
-        else:
-            x = self.start_conv(x)
+        x = self.start_conv(x)
         skip = 0
         adjacency_matrices = self.fixed_supports
         # calculate the current adaptive adj matrix once per iteration
