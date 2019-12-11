@@ -146,7 +146,7 @@ class GWNet(nn.Module):
             x = nn.functional.pad(x, (self.receptive_field - in_len, 0, 0, 0))
         if self.cat_feat_gc:
             f1, f2 = x[:,[0]], x[:,[1]]
-            x1 = self.start_conv(f1)
+            x1 = F.leaky_relu(self.start_conv(f1))
             x2 = F.leaky_relu(self.cat_feature_conv(f2))
             x = x1 + x2
         else:
