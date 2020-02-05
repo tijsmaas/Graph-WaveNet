@@ -25,6 +25,7 @@ class Trainer():
         predict = self.scaler.inverse_transform(output)
         assert predict.shape[1] == 1
         mae, mape, rmse = util.calc_metrics(predict.squeeze(1), real_val, null_val=0.0)
+        print ('MAPE', mape.item())
         mae.backward()
         if self.clip is not None:
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)

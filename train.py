@@ -9,6 +9,7 @@ from durbango import pickle_save
 from fastprogress import progress_bar
 
 from model import GWNet
+from model_lstm import LSTMNet
 from util import calc_tstep_metrics
 from exp_results import summary
 
@@ -18,8 +19,12 @@ def main(args, **model_kwargs):
     data = util.load_dataset(args.data, args.batch_size, args.batch_size, args.batch_size, n_obs=args.n_obs, fill_zeroes=args.fill_zeroes)
     scaler = data['scaler']
     aptinit, supports = util.make_graph_inputs(args, device)
+    print(args)
+    if args.lstm:
+        model = LSTMNet.from_args(args, device, supports, aptinit, **model_kwargs)
+    else:
+        model = GWNet.from_args(args, device, supports, aptinit, **model_kwargs)
 
-    model = GWNet.from_args(args, device, supports, aptinit, **model_kwargs)
     if args.checkpoint:
         model.load_checkpoint(torch.load(args.checkpoint))
     model.to(device)
@@ -29,18 +34,27 @@ def main(args, **model_kwargs):
     lowest_mae_yet = 100  # high value, will get overwritten
     mb = progress_bar(list(range(1, args.epochs + 1)))
     epochs_since_best_mae = 0
+    # Train on subset of sensors (faster for isolated pred)
+    incl_sensors = [17, 111, 12, 80, 200]
+
     for _ in mb:
         train_loss, train_mape, train_rmse = [], [], []
         data['train_loader'].shuffle()
         for iter, (x, y) in enumerate(data['train_loader'].get_iterator()):
             trainx = torch.Tensor(x).to(device).transpose(1, 3)
             trainy = torch.Tensor(y).to(device).transpose(1, 3)
+            trainx = trainx[:, :, incl_sensors, :]
+            trainy = trainy[:, :, incl_sensors, :]
+            # print (trainx.shape, trainy.shape)
             yspeed = trainy[:, 0, :, :]
             if yspeed.max() == 0: continue
             mae, mape, rmse = engine.train(trainx, yspeed)
             train_loss.append(mae)
             train_mape.append(mape)
             train_rmse.append(rmse)
+            print('MAPE', mape)
+            if iter % 10 == 5:
+                evaluate_multiple_horizon(device, engine, data, incl_sensors)
             if args.n_iters is not None and iter >= args.n_iters:
                 break
         engine.scheduler.step()
@@ -84,6 +98,21 @@ def eval_(ds, device, engine):
     total_time = time.time() - s1
     return total_time, valid_loss, valid_mape, valid_rmse
 
+def evaluate_multiple_horizon(device, engine, data, incl_sensors = None):
+    scaler = data['scaler']
+    realy = torch.Tensor(data['y_test']).transpose(1, 3)[:, 0, :, :].to(device)
+    # internally calls model.eval()
+    test_met_df, yhat = calc_tstep_metrics(engine.model, device, data['test_loader'], scaler, realy, args.seq_length, incl_sensors)
+    metric_vals = test_met_df.round(6)
+
+    for horizon_i in [2, 5, 8, 11]:
+        mae = metric_vals['mae'].iloc[horizon_i]
+        mape = metric_vals['mape'].iloc[horizon_i]
+        rmse = metric_vals['rmse'].iloc[horizon_i]
+        print("Horizon {:02d}, MAE: {:.2f}, MAPE: {:.4f}, RMSE: {:.2f}".format(
+                horizon_i + 1, mae, mape, rmse
+            )
+        )
 
 if __name__ == "__main__":
     parser = util.get_shared_arg_parser()
@@ -95,6 +124,9 @@ if __name__ == "__main__":
     parser.add_argument('--save', type=str, default='experiment', help='save path')
     parser.add_argument('--n_iters', default=None, help='quit after this many iterations')
     parser.add_argument('--es_patience', type=int, default=20, help='quit if no improvement after this many iterations')
+    # Added options to train with different architectures
+    parser.add_argument('--lstm', action='store_false', help='Train the LSTM-FC setting')
+    parser.add_argument('--isolated_sensors', action='store_false', help='Train every sensor independently.')
 
     args = parser.parse_args()
     t1 = time.time()
