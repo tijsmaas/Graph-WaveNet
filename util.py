@@ -190,17 +190,12 @@ def mask_and_fillna(loss, mask):
     return torch.mean(loss)
 
 
-def calc_tstep_metrics(model, device, test_loader, scaler, realy, seq_length, incl_sensors=None) -> pd.DataFrame:
-    # By default, evaluate for all sensors (realy: [6500, 207, 12])
-    if not incl_sensors:
-        incl_sensors = realy.size(1)
-
+def calc_tstep_metrics(model, device, test_loader, scaler, realy, seq_length) -> pd.DataFrame:
     # Compute predictions 1-12 horizons
     model.eval()
     outputs = []
     for _, (x, __) in enumerate(test_loader.get_iterator()):
         testx = torch.Tensor(x).to(device).transpose(1, 3)
-        testx = testx[:, :, incl_sensors, :]
         with torch.no_grad():
             preds = model(testx).transpose(1, 3)
         outputs.append(preds.squeeze(1))
@@ -213,7 +208,7 @@ def calc_tstep_metrics(model, device, test_loader, scaler, realy, seq_length, in
         # A nicer way is to finetune it by the maximum/minimum value in the train set
         pred = torch.clamp(pred, min=0., max=70.)
         #[idx, sensors, timeframe]
-        real = realy[:, incl_sensors, i]
+        real = realy[:, :, i]
         test_met.append([x.item() for x in calc_metrics(pred, real)])
     # For every horizon, metrics are a row in test_met
     test_met_df = pd.DataFrame(test_met, columns=['mae', 'mape', 'rmse']).rename_axis('t')

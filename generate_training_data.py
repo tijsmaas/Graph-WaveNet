@@ -10,13 +10,14 @@ import pandas as pd
 
 
 def generate_graph_seq2seq_io_data(
-        df, x_offsets, y_offsets, add_time_in_day=True, add_day_in_week=False, scaler=None
+        df, x_offsets, y_offsets, skip=1, incl_nodes=None, add_time_in_day=True, add_day_in_week=False, scaler=None
 ):
     """
     Generate samples from
     :param df:
     :param x_offsets:
     :param y_offsets:
+    :param skip: instead of turning every measurement+1h into a row, turn every x-th row into a sample. Way to constrain memory for longer histories.
     :param add_time_in_day:
     :param add_day_in_week:
     :param scaler:
@@ -27,6 +28,8 @@ def generate_graph_seq2seq_io_data(
 
     num_samples, num_nodes = df.shape
     data = np.expand_dims(df.values, axis=-1)
+    if incl_nodes:
+        data = data[:,incl_nodes,:]
     feature_list = [data]
     if add_time_in_day:
         time_ind = (df.index.values - df.index.values.astype("datetime64[D]")) / np.timedelta64(1, "D")
@@ -41,7 +44,7 @@ def generate_graph_seq2seq_io_data(
     x, y = [], []
     min_t = abs(min(x_offsets))
     max_t = abs(num_samples - abs(max(y_offsets)))  # Exclusive
-    for t in range(min_t, max_t):  # t is the index of the last observation.
+    for t in range(min_t, max_t, skip):  # t is the index of the last observation.
         x.append(data[t + x_offsets, ...])
         y.append(data[t + y_offsets, ...])
     x = np.stack(x, axis=0)
@@ -52,16 +55,26 @@ def generate_graph_seq2seq_io_data(
 def generate_train_val_test(args):
     seq_length_x, seq_length_y = args.seq_length_x, args.seq_length_y
     df = pd.read_hdf(args.traffic_df_filename)
+    print (args.traffic_df_filename, 'loaded')
     # 0 is the latest observed sample.
     x_offsets = np.sort(np.concatenate((np.arange(-(seq_length_x - 1), 1, 1),)))
     # Predict the next one hour
     y_offsets = np.sort(np.arange(args.y_start, (seq_length_y + 1), 1))
+    # Select random subset of nodes:
+    _, total_sensors = df.shape
+    if args.num_sensors == -1:
+        incl_sensors = list(range(total_sensors))
+    else:
+        incl_sensors = list(np.random.choice(total_sensors, args.num_sensors, replace=False))
+
     # x: (num_samples, input_length, num_nodes, input_dim)
     # y: (num_samples, output_length, num_nodes, output_dim)
     x, y = generate_graph_seq2seq_io_data(
         df,
         x_offsets=x_offsets,
         y_offsets=y_offsets,
+        skip=args.skip,
+        incl_nodes=None,
         add_time_in_day=True,
         add_day_in_week=args.dow,
     )
@@ -72,7 +85,9 @@ def generate_train_val_test(args):
     num_test = round(num_samples * 0.2)
     num_train = round(num_samples * 0.7)
     num_val = num_samples - num_test - num_train
+
     x_train, y_train = x[:num_train], y[:num_train]
+
     x_val, y_val = (
         x[num_train: num_train + num_val],
         y[num_train: num_train + num_val],
@@ -88,6 +103,7 @@ def generate_train_val_test(args):
             y=_y,
             x_offsets=x_offsets.reshape(list(x_offsets.shape) + [1]),
             y_offsets=y_offsets.reshape(list(y_offsets.shape) + [1]),
+            incl_sensors=incl_sensors
         )
 
 
@@ -98,6 +114,8 @@ if __name__ == "__main__":
     parser.add_argument("--seq_length_x", type=int, default=12, help="Sequence Length.",)
     parser.add_argument("--seq_length_y", type=int, default=12, help="Sequence Length.",)
     parser.add_argument("--y_start", type=int, default=1, help="Y pred start", )
+    parser.add_argument("--skip", type=int, default=11, help="Number of measurements to skip between dataset rows, helps to restrict memory", )
+    parser.add_argument("--num_sensors", type=int, default=-1, help="Number of measurements to skip between dataset rows, helps to restrict memory", )
     parser.add_argument("--dow", action='store_true',)
 
     args = parser.parse_args()
