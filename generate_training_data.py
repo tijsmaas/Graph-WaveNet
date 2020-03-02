@@ -28,8 +28,6 @@ def generate_graph_seq2seq_io_data(
 
     num_samples, num_nodes = df.shape
     data = np.expand_dims(df.values, axis=-1)
-    if incl_nodes:
-        data = data[:,incl_nodes,:]
     feature_list = [data]
     if add_time_in_day:
         time_ind = (df.index.values - df.index.values.astype("datetime64[D]")) / np.timedelta64(1, "D")
@@ -41,6 +39,8 @@ def generate_graph_seq2seq_io_data(
         feature_list.append(dow_tiled)
 
     data = np.concatenate(feature_list, axis=-1)
+    if incl_nodes:
+        data = data[:,incl_nodes,:]
     x, y = [], []
     min_t = abs(min(x_offsets))
     max_t = abs(num_samples - abs(max(y_offsets)))  # Exclusive
@@ -65,6 +65,7 @@ def generate_train_val_test(args):
     if args.num_sensors == -1:
         incl_sensors = list(range(total_sensors))
     else:
+        print('Only use', args.num_sensors, 'sensors')
         incl_sensors = list(np.random.choice(total_sensors, args.num_sensors, replace=False))
 
     # x: (num_samples, input_length, num_nodes, input_dim)
@@ -74,7 +75,7 @@ def generate_train_val_test(args):
         x_offsets=x_offsets,
         y_offsets=y_offsets,
         skip=args.skip,
-        incl_nodes=None,
+        incl_nodes=incl_sensors,
         add_time_in_day=True,
         add_day_in_week=args.dow,
     )

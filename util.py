@@ -1,5 +1,7 @@
 import argparse
 import pickle
+from shutil import copyfile
+
 import numpy as np
 import os
 
@@ -67,6 +69,7 @@ class StandardScaler():
 
     def inverse_transform(self, data):
         return (data * self.std) + self.mean
+
 
 
 
@@ -148,8 +151,93 @@ def load_adj(pkl_filename, adjtype):
     return sensor_ids, sensor_id_to_ind, adj
 
 
-def load_dataset(dataset_dir, batch_size, valid_batch_size=None, test_batch_size=None, n_obs=None, fill_zeroes=True):
+
+def alter_dataset_precompute_scaler(dataset_dir, n_obs=None, fill_zeroes=False):
+    """
+    Alters dataset by adding the precomputed scaler, for faster bootstrapping.
+    """
+    print('Loading sensor values once to compute the scaler...')
     data = {}
+    for category in ['train', 'val']:
+        cat_data = np.load(os.path.join(dataset_dir, category + '.npz'))
+        data['x_' + category] = cat_data['x']
+        data['y_' + category] = cat_data['y']
+        data[category] = cat_data
+        if n_obs is not None:
+            data['x_' + category] = data['x_' + category][:n_obs]
+            data['y_' + category] = data['y_' + category][:n_obs]
+    scaler = StandardScaler(mean=data['x_train'][..., 0].mean(), std=data['x_train'][..., 0].std(), fill_zeroes=fill_zeroes)
+
+    if 'scaler_mean' in data['val']:
+        print('Dataset already has precomputed scalar, overwriting...')
+
+    # Save as new dataset
+    print('Compressing...')
+    val_file = os.path.join(dataset_dir, 'val.npz')
+    # Backup (but don't overwrite the backup)
+    if not os.path.exists(val_file + '.bak'):
+        copyfile(val_file, val_file + '.bak')
+    np.savez_compressed(val_file, x=data['val']['x'], y=data['val']['y'],
+                        x_offsets=data['val']['x_offsets'], y_offsets=data['val']['y_offsets'],
+                        scaler_mean=scaler.mean, scaler_std=scaler.std, scaler_fillz=scaler.fill_zeroes)
+    print('Added precomputed scaler to dataset')
+
+
+class LazyDataLoader(dict):
+
+    def __getitem__(self, key):
+        value = dict.__getitem__(self, key)
+        # When to compute
+        #  data['train_loader'] -> DataLoader(data['x_train'], data['y_train'], batch_size)
+        if isinstance(value, tuple):
+            category, batch_size, n_obs, scaler = value
+            print('Lazyload', key)
+            if 'loader' in key:
+                # Lazy load the values needed to return the loader
+                value = DataLoader(self['x_' + category], self['y_' + category], batch_size)
+                # Cache computed value
+                dict.__setitem__(self, key, value)
+            elif key.endswith('_'+category):
+                cat_data = np.load(os.path.join(self['dataset_dir'], category + '.npz'))
+                data = {}
+                data['x_' + category] = cat_data['x']
+                data['y_' + category] = cat_data['y']
+                if n_obs is not None:
+                    data['x_' + category] = data['x_' + category][:n_obs]
+                    data['y_' + category] = data['y_' + category][:n_obs]
+                # Scale only the x vals
+                data['x_' + category][..., 0] = scaler.transform(data['x_' + category][..., 0])
+                # Store both the values of x and y
+                value = data[key]
+                dict.__setitem__(self, 'x_' + category, data['x_' + category])
+                dict.__setitem__(self, 'y_' + category, data['y_' + category])
+        return value
+
+def lazy_load_dataset(dataset_dir, batch_size, valid_batch_size=None, test_batch_size=None, n_obs=None, fill_zeroes=True):
+    print('loading dataset', dataset_dir)
+    # These conditions have not been tested properly
+    assert n_obs is None and fill_zeroes is False
+    data = LazyDataLoader({'dataset_dir': dataset_dir})
+    # Load the scaler from the validation set
+    cat_data = np.load(os.path.join(dataset_dir, 'val.npz'))
+    # If no precomputed scaler is embedded in the dataset, create it.
+    if 'scalar_mean' not in cat_data.files:
+        alter_dataset_precompute_scaler(dataset_dir,n_obs, fill_zeroes)
+        cat_data = np.load(os.path.join(dataset_dir, 'val.npz'))
+
+    scaler = StandardScaler(mean=float(cat_data['scaler_mean']), std=float(cat_data['scaler_std']), fill_zeroes=cat_data['scaler_fillz'])
+    for category in ['train', 'val', 'test']:
+        # polulate entries for preloading
+        data[category + '_loader'] = (category, batch_size, n_obs, scaler)
+        data['x_' + category] = (category, batch_size, n_obs, scaler)
+        data['y_' + category] = (category, batch_size, n_obs, scaler)
+    data['scaler'] = scaler
+    print ('data', data)
+    return data
+
+def load_dataset(dataset_dir, batch_size, valid_batch_size=None, test_batch_size=None, n_obs=None, fill_zeroes=True):
+    print('loading dataset', dataset_dir)
+    data = LazyDataLoader({'dataset_dir': dataset_dir})
     for category in ['train', 'val', 'test']:
         cat_data = np.load(os.path.join(dataset_dir, category + '.npz'))
         data['x_' + category] = cat_data['x']
@@ -167,6 +255,14 @@ def load_dataset(dataset_dir, batch_size, valid_batch_size=None, test_batch_size
     data['scaler'] = scaler
     return data
 
+# Create a mask that is 1 for all values and 0 for all unknowns
+def mask_nan_labels(labels, null_val=0.):
+    if np.isnan(null_val):
+        mask = ~torch.isnan(labels)
+    else:
+        mask = (labels != null_val)
+    mask = mask.float()
+    return mask
 
 def calc_metrics(preds, labels, null_val=0.):
     if np.isnan(null_val):
@@ -183,11 +279,72 @@ def calc_metrics(preds, labels, null_val=0.):
     rmse = torch.sqrt(mse)
     return mae, mape, rmse
 
+def evaluate_multiple_horizon(model, device, data, seq_length):
+    scaler = data['scaler']
+    realy = torch.Tensor(data['y_test']).transpose(1, 3)[:, 0, :, :].to(device)
+    # internally calls model.eval()
+    test_met_df, yhat = calc_tstep_metrics(model, device, data['test_loader'], scaler, realy, seq_length)
+    metric_vals = test_met_df.round(6)
+
+    for horizon_i in [2, 5, 8, 11]:
+        mae = metric_vals['mae'].iloc[horizon_i]
+        mape = metric_vals['mape'].iloc[horizon_i]
+        rmse = metric_vals['rmse'].iloc[horizon_i]
+        print("Horizon {:02d}, MAE: {:.2f}, MAPE: {:.4f}, RMSE: {:.2f}".format(
+                horizon_i + 1, mae, mape, rmse
+            )
+        )
 
 def mask_and_fillna(loss, mask):
     loss = loss * mask
     loss = torch.where(torch.isnan(loss), torch.zeros_like(loss), loss)
     return torch.mean(loss)
+
+
+def visualise_metrics(model, device, test_loader, scaler, realy, output_dir):
+    # Compute predictions 1-12 horizons
+    model.eval()
+    outputs = []
+    for _, (x, __) in enumerate(test_loader.get_iterator()):
+        testx = torch.Tensor(x).to(device).transpose(1, 3)
+        with torch.no_grad():
+            preds = model(testx).transpose(1, 3)
+        outputs.append(preds.squeeze(1))
+    yhat = torch.cat(outputs, dim=0)[:realy.size(0), ...]
+    test_met = []
+
+    # Compute error for every sensor for every timestep
+    pred = scaler.inverse_transform(yhat).to(device)
+
+    # print(pred.shape, realy.shape)
+    # dcrnn_preds = np.load('/home/tijs/UvA/Thesis/Graph-Wavenet2/data/dcrnn_predictions.npz')['predictions']
+    # pred = torch.Tensor(dcrnn_preds).to(device)
+    # pred = pred.transpose(0, 1).transpose(1, 2)
+
+    mask = mask_nan_labels(realy).to(device)
+    # mae: [val_seq, sensors, timestep]
+    mae = torch.abs(mask*pred - mask*realy).to(device)
+    # mae per sensor per timestep
+    mae_global = mae.mean(dim=0)
+    # Compare variance between all sensors for specific timestep(s)   mae=[sensor, timestep]
+    sensor_err_var = [torch.var(mae_global[:, t]) for t in [2, 5, 8, 11]]
+    sensor_err_mean = [torch.mean(mae_global[:, t]) for t in [2, 5, 8, 11]]
+    print (sensor_err_mean)
+    print (sensor_err_var)
+
+    # mae per sensor, now average over all timesteps
+    global_error_per_sensor = np.array(mae_global.mean(dim=1).detach().cpu())
+    np.savetxt(os.path.join(output_dir, 'sensors.txt'), global_error_per_sensor)
+
+    fname = os.path.join(output_dir, 'sensor_preds.npz')
+    # average mae over [val_seq, sensors]
+    sensor_err = np.array(mae.mean(dim=2).detach().cpu())
+    np.savez_compressed(fname, global_error_per_sensor=global_error_per_sensor, sensor_err=sensor_err)
+    # for i in range(288):
+    #     fname = os.path.join(output_dir, 'sensor_pred', 'sensors'+str(i)+'.txt')
+    #     error_per_sensor = np.array(mae[i].mean(dim=1).detach().cpu())
+    #     np.savetxt(fname, error_per_sensor)
+
 
 
 def calc_tstep_metrics(model, device, test_loader, scaler, realy, seq_length) -> pd.DataFrame:
@@ -202,14 +359,20 @@ def calc_tstep_metrics(model, device, test_loader, scaler, realy, seq_length) ->
     yhat = torch.cat(outputs, dim=0)[:realy.size(0), ...]
     test_met = []
 
+    # dcrnn_preds = np.load('/home/tijs/UvA/Thesis/Graph-Wavenet2/data/dcrnn_predictions.npz')['predictions']
+    # pred2 = torch.Tensor(dcrnn_preds).to(device)
+    # pred2 = pred2.transpose(0, 1).transpose(1, 2)
+
     for i in range(seq_length):
         pred = scaler.inverse_transform(yhat[:, :, i])
+        # pred = pred2[:, :, i]
+
         # This is kind of a trick, if the speeds are higher than 70 this needs to be changed.
         # A nicer way is to finetune it by the maximum/minimum value in the train set
-        pred = torch.clamp(pred, min=0., max=70.)
+        # pred = torch.clamp(pred, min=0., max=70.)
         #[idx, sensors, timeframe]
         real = realy[:, :, i]
-        test_met.append([x.item() for x in calc_metrics(pred, real)])
+        test_met.append([x.item() for x in calc_metrics(pred, real, null_val=0.0)])
     # For every horizon, metrics are a row in test_met
     test_met_df = pd.DataFrame(test_met, columns=['mae', 'mape', 'rmse']).rename_axis('t')
     return test_met_df, yhat

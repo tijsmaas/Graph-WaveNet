@@ -3,9 +3,8 @@ from model import *
 import util
 
 class Trainer():
-    def __init__(self, model: GWNet, scaler, lrate, wdecay, clip=3, lr_decay_rate=.97):
+    def __init__(self, model, scaler, lrate, wdecay, clip=3, lr_decay_rate=.97):
         self.model = model
-
         self.optimizer = optim.Adam(self.model.parameters(), lr=lrate, weight_decay=wdecay)
         self.scaler = scaler
         self.clip = clip
@@ -38,6 +37,6 @@ class Trainer():
         output = self.model(input).transpose(1,3) #  [batch_size,seq_length,num_nodes,1]
         real = torch.unsqueeze(real_val,dim=1)
         predict = self.scaler.inverse_transform(output)
-        predict = torch.clamp(predict, min=0., max=70.)
+        # predict = torch.clamp(predict, min=0., max=70.)
         mae, mape, rmse = [x.item() for x in util.calc_metrics(predict, real, null_val=0.0)]
         return mae, mape, rmse

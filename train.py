@@ -11,9 +11,11 @@ from fastprogress import progress_bar
 from model import GWNet
 from model_lstm import LSTMNet
 from model_static import StaticNet
-from util import calc_tstep_metrics
+from util import *
 from exp_results import summary
 
+# Test wavenet locally with:
+# --graph_wavenet --batch_size 20 --apt_size 4 --nhid 16
 
 def main(args, **model_kwargs):
     # Train on subset of sensors (faster for isolated pred)
@@ -22,20 +24,27 @@ def main(args, **model_kwargs):
     device = torch.device(args.device)
     data = util.load_dataset(args.data, args.batch_size, args.batch_size, args.batch_size, n_obs=args.n_obs, fill_zeroes=args.fill_zeroes)
     scaler = data['scaler']
-    aptinit, supports = util.make_graph_inputs(args, device)
+    supports = []
+    aptinit = 0
+    # aptinit, supports = util.make_graph_inputs(args, device)
+
     # Length of the prediction
     args.seq_length = data['y_val'].shape[1]
     args.num_sensors = data['x_val'].shape[2]
-    print(args)
     if args.static:
         print('Selected static prediction')
         model = StaticNet.from_args(args, device, supports, aptinit, **model_kwargs)
     elif args.lstm:
-        print('Selected LSTM model')
+        print('Selected LSTM-FC model')
+        args.nhid = 256
+        args.weight_decay = 0.0005
+        args.learning_rate = 0.001
         model = LSTMNet.from_args(args, device, supports, aptinit, **model_kwargs)
     else:
         print('Selected Graph Wavenet model')
         model = GWNet.from_args(args, device, supports, aptinit, **model_kwargs)
+
+    print(args)
 
     if args.checkpoint:
         model.load_checkpoint(torch.load(args.checkpoint))
@@ -46,6 +55,7 @@ def main(args, **model_kwargs):
     lowest_mae_yet = 100  # high value, will get overwritten
     mb = progress_bar(list(range(1, args.epochs + 1)))
     epochs_since_best_mae = 0
+    ep_count = 1
 
     for _ in mb:
         train_loss, train_mape, train_rmse = [], [], []
@@ -63,15 +73,13 @@ def main(args, **model_kwargs):
             print('MAPE', mape)
             if iter % 10 == 5:
                 # WARN: saves for every x iterations
-                try:
-                    evaluate_multiple_horizon(device, engine, data)
-                except:
-                    print ('Out of memory, skipping evalution and saving model...')
-                    torch.save(engine.model.state_dict(), best_model_save_path)
+                evaluate_multiple_horizon(engine.model, device, data, args.seq_length)
 
             if args.n_iters is not None and iter >= args.n_iters:
                 break
         engine.scheduler.step()
+        print('EPOCH', ep_count)
+        ep_count += 1
         _, valid_loss, valid_mape, valid_rmse = eval_(data['val_loader'], device, engine)
         m = dict(train_loss=np.mean(train_loss), train_mape=np.mean(train_mape),
                  train_rmse=np.mean(train_rmse), valid_loss=np.mean(valid_loss),
@@ -112,21 +120,6 @@ def eval_(ds, device, engine):
     total_time = time.time() - s1
     return total_time, valid_loss, valid_mape, valid_rmse
 
-def evaluate_multiple_horizon(device, engine, data):
-    scaler = data['scaler']
-    realy = torch.Tensor(data['y_test']).transpose(1, 3)[:, 0, :, :].to(device)
-    # internally calls model.eval()
-    test_met_df, yhat = calc_tstep_metrics(engine.model, device, data['test_loader'], scaler, realy, args.seq_length)
-    metric_vals = test_met_df.round(6)
-
-    for horizon_i in [2, 5, 8, 11]:
-        mae = metric_vals['mae'].iloc[horizon_i]
-        mape = metric_vals['mape'].iloc[horizon_i]
-        rmse = metric_vals['rmse'].iloc[horizon_i]
-        print("Horizon {:02d}, MAE: {:.2f}, MAPE: {:.4f}, RMSE: {:.2f}".format(
-                horizon_i + 1, mae, mape, rmse
-            )
-        )
 
 if __name__ == "__main__":
     parser = util.get_shared_arg_parser()
